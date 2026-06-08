@@ -220,6 +220,8 @@ def run_pipeline():
     chunks = chunk_documents(docs)
     print(f"✓ Created {len(chunks)} chunks")
 
+    print(f"\n--- Embedding ({EMBEDDING_MODEL}) ---")
+    print("  (bge-m3 trên CPU có thể mất 20-40 phút, đợi thấy log batch chạy dần)")
     chunks = embed_chunks(chunks)
     print(f"✓ Embedded {len(chunks)} chunks")
 

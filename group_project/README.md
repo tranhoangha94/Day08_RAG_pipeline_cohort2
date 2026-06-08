@@ -171,7 +171,32 @@ run_dashboard()
 ## Kiến Trúc Hệ Thống
 
 ```
-[Vẽ diagram kiến trúc ở đây]
+┌─────────────────────────────────────────────────────────────┐
+│                    Streamlit UI (app.py)                      │
+│  Chat + Follow-up memory + Hiển thị sources + Citation      │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Task 10: generate_with_citation()              │
+│  Reorder chunks → Format context → OpenAI gpt-4o-mini         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Task 9: retrieve() — Hybrid Pipeline           │
+│  Semantic (5) + BM25 (6) → RRF → Rerank (7) → Fallback (8) │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+┌──────────────────────┐   ┌──────────────────────────┐
+│ data/index/          │   │ data/standardized/       │
+│ vector_index.pkl     │   │ legal/ + news/ (.md)     │
+└──────────────────────┘   └──────────────────────────┘
+
+Evaluation (group_project/evaluation/):
+  golden_dataset.json → eval_pipeline.py (DeepEval) → results.md
 ```
 
 ---
@@ -193,10 +218,14 @@ run_dashboard()
 # Cài đặt dependencies
 pip install -r requirements.txt
 
-# Chạy app
+# Đảm bảo đã chạy Task 1-4 (có data/index/vector_index.pkl)
+python -m src.task4_chunking_indexing
+
+# Chạy chatbot Streamlit
 streamlit run app.py
-# hoặc
-chainlit run app.py
+
+# Chạy evaluation (DeepEval — cần OPENAI_API_KEY)
+python group_project/evaluation/eval_pipeline.py
 ```
 
 ---

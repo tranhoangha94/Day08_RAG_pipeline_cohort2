@@ -32,10 +32,30 @@ def get_model() -> SentenceTransformer:
     return _model
 
 
-def embed_texts(texts: list[str]) -> np.ndarray:
+def embed_texts(texts: list[str], batch_size: int = 32) -> np.ndarray:
+    """Embed theo batch để tránh treo và hiện tiến trình."""
     model = get_model()
-    vectors = model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
-    return np.asarray(vectors, dtype=np.float32)
+    total = len(texts)
+    if total == 0:
+        return np.array([], dtype=np.float32)
+
+    batches = []
+    num_batches = (total + batch_size - 1) // batch_size
+    print(f"  Embedding {total} chunks in {num_batches} batches (batch_size={batch_size})...")
+
+    for i in range(0, total, batch_size):
+        batch_num = i // batch_size + 1
+        end = min(i + batch_size, total)
+        print(f"    [{batch_num}/{num_batches}] chunks {i + 1}-{end}/{total}", flush=True)
+        vectors = model.encode(
+            texts[i:end],
+            show_progress_bar=False,
+            normalize_embeddings=True,
+            batch_size=batch_size,
+        )
+        batches.append(np.asarray(vectors, dtype=np.float32))
+
+    return np.vstack(batches)
 
 
 def embed_query(query: str) -> np.ndarray:

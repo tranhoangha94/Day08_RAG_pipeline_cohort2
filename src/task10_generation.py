@@ -143,7 +143,13 @@ def format_context(chunks: list[dict]) -> str:
 # GENERATION
 # =============================================================================
 
-def generate_with_citation(query: str, top_k: int = TOP_K) -> dict:
+def generate_with_citation(
+    query: str,
+    top_k: int = TOP_K,
+    use_reranking: bool = True,
+    score_threshold: float | None = None,
+    chat_history: list[dict] | None = None,
+) -> dict:
     """
     End-to-end RAG generation có citation.
 
@@ -202,20 +208,27 @@ def generate_with_citation(query: str, top_k: int = TOP_K) -> dict:
     #     "retrieval_source": chunks[0].get("source", "hybrid") if chunks else "none"
     # }
 
-    chunks = retrieve(query, top_k=top_k)
+    retrieve_kwargs: dict = {"top_k": top_k, "use_reranking": use_reranking}
+    if score_threshold is not None:
+        retrieve_kwargs["score_threshold"] = score_threshold
+
+    chunks = retrieve(query, **retrieve_kwargs)
     reordered = reorder_for_llm(chunks)
     context = format_context(reordered)
     user_message = f"Context:\n{context}\n\n---\n\nQuestion: {query}"
 
     from openai import OpenAI
 
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if chat_history:
+        for turn in chat_history[-6:]:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+    messages.append({"role": "user", "content": user_message})
+
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
+        messages=messages,
         temperature=TEMPERATURE,
         top_p=TOP_P,
     )
