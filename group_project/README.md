@@ -205,10 +205,12 @@ Evaluation (group_project/evaluation/):
 
 | Thành viên | MSSV | Nhiệm vụ | Trạng thái |
 |-----------|------|----------|------------|
-| | | | |
-| | | | |
-| | | | |
-| | | | |
+| Trần Hoàng Hà | 2A202600612 | Task 1 (thu thập văn bản pháp luật), Task 2 (crawl bài báo), Task 3 (convert markdown) | Hoàn thành |
+| Hoàng Đức Trường | 2A202600552 | Task 4 (chunking & indexing — Cohere embed-v4.0 + Weaviate Docker), Task 5 (semantic search) | Hoàn thành |
+| Nguyễn Hồ Diệu Linh | 2A202600567 | Task 6 (lexical search — Weaviate BM25 built-in), Task 7 (reranking — Cohere rerank-v3.5 + RRF + MMR) | Hoàn thành |
+| Nguyễn Thị Bích Duyên | 2A202600752 | Task 8 (PageIndex vectorless RAG), Task 9 (retrieval pipeline hoàn chỉnh + fallback logic) | Hoàn thành |
+| Nguyễn Thị Hiểu | 2A202600545 | Task 10 (generation có citation + reorder_for_llm), Yêu cầu 2 (evaluation pipeline — golden dataset + A/B comparison) | Hoàn thành |
+| Nguyễn Hoàng Tùng | 2A202600628 | Yêu cầu 1 (RAG Chatbot — Streamlit UI, conversation memory, source display, citation cards), tích hợp toàn bộ pipeline, docker-compose setup | Hoàn thành |
 
 ---
 
