@@ -28,6 +28,8 @@ Cài đặt:
 
 from pathlib import Path
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 STANDARDIZED_DIR = Path(__file__).parent.parent / "data" / "standardized"
 
 
@@ -36,8 +38,8 @@ STANDARDIZED_DIR = Path(__file__).parent.parent / "data" / "standardized"
 # =============================================================================
 
 # TODO: Chọn chunking strategy và giải thích vì sao
-CHUNK_SIZE = 500        # Vì sao chọn 500? ...
-CHUNK_OVERLAP = 50      # Vì sao chọn 50? ...
+CHUNK_SIZE = 500        # Vì sao chọn 500? văn bản pháp luật ~1 đoạn, đủ context cho retrieval
+CHUNK_OVERLAP = 50      # Vì sao chọn 50? 10% overlap giữ ngữ cảnh giữa các chunk liền kề
 CHUNKING_METHOD = "recursive"  # "recursive" | "markdown_header" | "semantic"
 
 # TODO: Chọn embedding model và giải thích
@@ -46,6 +48,8 @@ EMBEDDING_DIM = 1024
 
 # TODO: Chọn vector store
 VECTOR_STORE = "weaviate"  # "weaviate" | "chromadb" | "faiss"
+# Fallback local khi chưa chạy Weaviate Docker — lưu tại data/index/vector_index.pkl
+VECTOR_STORE_LOCAL = "local_pickle"
 
 
 # =============================================================================
@@ -69,7 +73,21 @@ def load_documents() -> list[dict]:
     #         "metadata": {"source": md_file.name, "type": doc_type}
     #     })
     # return documents
-    raise NotImplementedError("Implement load_documents")
+
+    documents = []
+    if not STANDARDIZED_DIR.exists():
+        return documents
+
+    for md_file in STANDARDIZED_DIR.rglob("*.md"):
+        content = md_file.read_text(encoding="utf-8")
+        doc_type = "legal" if "legal" in str(md_file) else "news"
+        documents.append(
+            {
+                "content": content,
+                "metadata": {"source": md_file.name, "type": doc_type},
+            }
+        )
+    return documents
 
 
 def chunk_documents(documents: list[dict]) -> list[dict]:
@@ -98,7 +116,25 @@ def chunk_documents(documents: list[dict]) -> list[dict]:
     #             "metadata": {**doc["metadata"], "chunk_index": i}
     #         })
     # return chunks
-    raise NotImplementedError("Implement chunk_documents")
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
+    chunks = []
+    for doc in documents:
+        splits = splitter.split_text(doc["content"])
+        for i, chunk_text in enumerate(splits):
+            if not chunk_text.strip():
+                continue
+            chunks.append(
+                {
+                    "content": chunk_text,
+                    "metadata": {**doc["metadata"], "chunk_index": i},
+                }
+            )
+    return chunks
 
 
 def embed_chunks(chunks: list[dict]) -> list[dict]:
@@ -119,7 +155,14 @@ def embed_chunks(chunks: list[dict]) -> list[dict]:
     # for chunk, emb in zip(chunks, embeddings):
     #     chunk["embedding"] = emb.tolist()
     # return chunks
-    raise NotImplementedError("Implement embed_chunks")
+
+    from src._vector_store import embed_texts
+
+    texts = [c["content"] for c in chunks]
+    embeddings = embed_texts(texts)
+    for chunk, emb in zip(chunks, embeddings):
+        chunk["embedding"] = emb.tolist()
+    return chunks
 
 
 def index_to_vectorstore(chunks: list[dict]):
@@ -152,7 +195,12 @@ def index_to_vectorstore(chunks: list[dict]):
     #             properties={"content": chunk["content"], ...},
     #             vector=chunk["embedding"]
     #         )
-    raise NotImplementedError("Implement index_to_vectorstore")
+
+    import numpy as np
+    from src._vector_store import save_index
+
+    embeddings = np.array([c.pop("embedding") for c in chunks], dtype=np.float32)
+    save_index(chunks, embeddings)
 
 
 def run_pipeline():
@@ -161,11 +209,13 @@ def run_pipeline():
     print("Task 4: Chunking & Indexing")
     print(f"  Chunking: {CHUNKING_METHOD} (size={CHUNK_SIZE}, overlap={CHUNK_OVERLAP})")
     print(f"  Embedding: {EMBEDDING_MODEL} (dim={EMBEDDING_DIM})")
-    print(f"  Vector Store: {VECTOR_STORE}")
+    print(f"  Vector Store: {VECTOR_STORE} (local fallback: {VECTOR_STORE_LOCAL})")
     print("=" * 50)
 
     docs = load_documents()
     print(f"\n✓ Loaded {len(docs)} documents")
+    if not docs:
+        raise RuntimeError("Không có documents. Chạy task3 trước.")
 
     chunks = chunk_documents(docs)
     print(f"✓ Created {len(chunks)} chunks")

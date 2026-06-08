@@ -9,7 +9,25 @@ Chọn 1 trong các phương pháp:
 Nếu dùng MMR hoặc RRF, đảm bảo hiểu và giải thích được cơ chế.
 """
 
+import os
+import re
 from typing import Optional
+
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+JINA_API_KEY = os.getenv("JINA_API_KEY", "")
+
+
+def _keyword_rerank_score(query: str, content: str) -> float:
+    """Fallback khi chưa có Jina API key."""
+    query_tokens = set(re.findall(r"\w+", query.lower()))
+    content_tokens = set(re.findall(r"\w+", content.lower()))
+    if not query_tokens:
+        return 0.0
+    return len(query_tokens & content_tokens) / len(query_tokens)
 
 
 def rerank_cross_encoder(
@@ -49,7 +67,32 @@ def rerank_cross_encoder(
     # Option B: Local model (Qwen3-Reranker)
     # from transformers import AutoModelForSequenceClassification, AutoTokenizer
     # ...
-    raise NotImplementedError("Implement rerank_cross_encoder")
+
+    if JINA_API_KEY and not JINA_API_KEY.endswith("xxx"):
+        try:
+            response = requests.post(
+                "https://api.jina.ai/v1/rerank",
+                headers={"Authorization": f"Bearer {JINA_API_KEY}"},
+                json={
+                    "model": "jina-reranker-v2-base-multilingual",
+                    "query": query,
+                    "documents": [c["content"] for c in candidates],
+                    "top_n": top_k,
+                },
+                timeout=30,
+            )
+            response.raise_for_status()
+            reranked = response.json()["results"]
+            return [
+                {**candidates[r["index"]], "score": r["relevance_score"]}
+                for r in reranked
+            ]
+        except Exception:
+            pass
+
+    scored = [{**c, "score": _keyword_rerank_score(query, c["content"])} for c in candidates]
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    return scored[:top_k]
 
 
 def rerank_mmr(
@@ -102,7 +145,39 @@ def rerank_mmr(
     #     remaining.remove(best_idx)
     #
     # return [candidates[i] for i in selected]
-    raise NotImplementedError("Implement rerank_mmr")
+
+    import numpy as np
+
+    def cosine_sim(a, b):
+        a_arr, b_arr = np.array(a), np.array(b)
+        denom = np.linalg.norm(a_arr) * np.linalg.norm(b_arr)
+        return float(np.dot(a_arr, b_arr) / denom) if denom else 0.0
+
+    selected: list[int] = []
+    remaining = list(range(len(candidates)))
+
+    for _ in range(min(top_k, len(candidates))):
+        best_idx = None
+        best_score = float("-inf")
+
+        for idx in remaining:
+            relevance = cosine_sim(query_embedding, candidates[idx].get("embedding", []))
+            max_sim_to_selected = 0.0
+            for sel_idx in selected:
+                sim = cosine_sim(
+                    candidates[idx].get("embedding", []),
+                    candidates[sel_idx].get("embedding", []),
+                )
+                max_sim_to_selected = max(max_sim_to_selected, sim)
+            mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim_to_selected
+            if mmr_score > best_score:
+                best_score = mmr_score
+                best_idx = idx
+
+        selected.append(best_idx)
+        remaining.remove(best_idx)
+
+    return [{**candidates[i], "score": best_score} for i in selected]
 
 
 def rerank_rrf(
@@ -142,7 +217,23 @@ def rerank_rrf(
     #     results.append(item)
     #
     # return results
-    raise NotImplementedError("Implement rerank_rrf")
+
+    rrf_scores: dict[str, float] = {}
+    content_map: dict[str, dict] = {}
+
+    for ranked_list in ranked_lists:
+        for rank, item in enumerate(ranked_list, 1):
+            key = item["content"]
+            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (k + rank)
+            content_map[key] = item
+
+    sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+    results = []
+    for content, score in sorted_items[:top_k]:
+        item = content_map[content].copy()
+        item["score"] = score
+        results.append(item)
+    return results
 
 
 # =============================================================================

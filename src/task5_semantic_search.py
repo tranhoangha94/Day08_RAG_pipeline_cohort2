@@ -56,7 +56,10 @@ def semantic_search(query: str, top_k: int = 10) -> list[dict]:
     #     }
     #     for obj in results.objects
     # ]
-    raise NotImplementedError("Implement semantic_search")
+
+    from src._vector_store import cosine_search
+
+    return cosine_search(query, top_k=top_k)
 
 
 if __name__ == "__main__":
