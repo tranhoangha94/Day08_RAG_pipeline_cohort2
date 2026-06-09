@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rag-news": {
+      "command": "python",
+      "args": ["mcp_server_stub.py"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

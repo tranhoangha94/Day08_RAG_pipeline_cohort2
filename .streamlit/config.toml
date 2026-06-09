@@ -1,0 +1,3 @@
+[server]
+# Tránh Streamlit quét toàn bộ package transformers → log bootstrap/__path__ noise
+fileWatcherType = "none"
